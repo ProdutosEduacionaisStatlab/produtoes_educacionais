@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Pré-visualização da Prova</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body { background-color: #525659; } /* Fundo escuro igual leitor de PDF */
+        .folha-a4 {
+            background-color: white;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 50px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            font-family: "Times New Roman", Times, serif; /* Fonte de prova! */
+        }
+        .cabecalho { text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 30px; }
+        .cabecalho h4, .cabecalho h5 { margin: 5px 0; font-weight: bold; }
+        .info-prova { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 1.1em;}
+        .questao { margin-bottom: 35px; text-align: justify; font-size: 1.1em;}
+        .alternativas { list-style-type: none; padding-left: 20px; margin-top: 10px; }
+        .alternativas li { margin-bottom: 8px; }
+        .badge-correta { font-family: Arial, sans-serif; font-size: 0.7em; }
+    </style>
+</head>
+<body>
+
+    <div class="bg-dark p-3 text-center sticky-top shadow d-flex justify-content-center align-items-center">
+        <a href="javascript:history.back()" class="btn btn-outline-light me-3">← Voltar e Editar</a>
+        
+        <form action="{% url 'gerar_provas' %}" method="POST" class="m-0">
+            {% csrf_token %}
+            
+            <input type="hidden" name="professor" value="{{ professor }}">
+            <input type="hidden" name="periodo" value="{{ periodo }}">
+            {% if data_prova %}
+                <input type="hidden" name="data_prova" value="{{ data_prova|date:'Y-m-d' }}">
+            {% endif %}
+            <input type="hidden" name="num_versoes" value="{{ num_versoes }}">
+            
+            <input type="hidden" name="tipo_selecao" value="manual">
+            
+            {% for id in questoes_ids %}
+                <input type="hidden" name="questoes_selecionadas" value="{{ id }}">
+            {% endfor %}
+
+            <button type="submit" class="btn btn-success fw-bold text-dark px-5 shadow">
+                Gerar {{ num_versoes }} PDF(s) Definitivo(s) em .ZIP
+            </button>
+        </form>
+    </div>
+
+    <div class="container mt-3">
+        <div class="alert alert-info text-center shadow-sm">
+            <strong>👁️ Modo de Conferência:</strong> A etiqueta verde "GABARITO" aparece apenas nesta tela para sua validação. O PDF final dos alunos será gerado limpo, sem marcações. O Gabarito Mestre com as resoluções será baixado em um PDF separado.
+        </div>
+    </div>
+
+    <div class="folha-a4">
+        
+        <div class="cabecalho">
+            <h4>UNIVERSIDADE FEDERAL DO CEARÁ</h4>
+            <h5>DEPARTAMENTO DE ESTATÍSTICA E MATEMÁTICA APLICADA</h5>
+            <h5>Avaliação Oficial de Estatística</h5>
+        </div>
+
+        <div class="info-prova">
+            <div><strong>Professor:</strong> {{ professor }}</div>
+            <div><strong>Semestre:</strong> {{ periodo }}</div>
+            <div><strong>Data:</strong> {{ data_prova|date:"d/m/Y" }}</div>
+        </div>
+
+        {% for q in questoes %}
+        <div class="questao">
+            <p><strong>{{ q.numero }}.</strong> {{ q.enunciado|safe }}</p>
+            
+            <ul class="alternativas">
+                {% for letra, texto in q.opcoes %}
+                    <li>
+                        <strong>{{ letra }})</strong> {{ texto|safe }}
+                        {% if letra == q.letra_correta %}
+                            <span class="badge bg-success ms-2 badge-correta">GABARITO</span>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% empty %}
+        <div class="alert alert-danger text-center font-sans">
+            Nenhuma questão foi selecionada ou encontrada. Volte e selecione as questões.
+        </div>
+        {% endfor %}
+
+    </div>
+
+</body>
+</html>

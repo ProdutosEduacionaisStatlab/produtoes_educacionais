@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StatLab - Gerador de Avaliações</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .hover-bg-light:hover { background-color: #f8f9fa; }
+        /* Estilo para suavizar a transição dos botões de tópico */
+        .btn-outline-primary { transition: all 0.2s ease-in-out; }
+    </style>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="{% url 'index' %}"> StatLab</a>
+            <div class="d-flex">
+                <a href="{% url 'importar_csv' %}" class="btn btn-outline-light btn-sm me-3">+ Importar Questões (CSV)</a>
+                <a href="/admin/" class="btn btn-outline-secondary btn-sm" target="_blank">⚙️ Painel Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4 mb-5">
+        <div class="row justify-content-center">
+            <div class="col-md-9">
+                <div class="card shadow border-0 rounded-3">
+                    <div class="card-header bg-primary text-white py-3">
+                        <h4 class="mb-0 fw-bold"> Configuração da Avaliação</h4>
+                    </div>
+                    <div class="card-body p-4">
+                        
+                        <form action="{% url 'previa' %}" method="POST" id="formProva">
+                            {% csrf_token %}
+                            
+                            <h5 class="mb-3 text-secondary border-bottom pb-2">1. Cabeçalho</h5>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Nome do Professor:</label>
+                                <input type="text" class="form-control bg-light" name="professor" value="">
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">Período/Semestre:</label>
+                                    <input type="text" class="form-control" name="periodo" placeholder="Ex: 2026.1">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">Data da Prova:</label>
+                                    <input type="date" class="form-control" name="data_prova" required>
+                                </div>
+                            </div>
+
+                            <h5 class="mt-4 mb-3 text-secondary border-bottom pb-2">2. Estrutura do Banco</h5>
+
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <label class="form-label fw-bold">Selecione a(s) Disciplina(s): <small class="text-muted fw-normal">(Segure Ctrl ou Cmd para selecionar várias)</small></label>
+                                    <select class="form-select border-primary" name="disciplina" id="disciplinaSelect" multiple required size="4">
+                                        {% for d in disciplinas %}
+                                            <option value="{{ d.id }}">{{ d.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row mb-4" id="area_topicos" style="display: none;">
+                                <div class="col-12">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label fw-bold text-primary mb-0">Tópicos Inclusos (Filtro):</label>
+                                        <span class="badge bg-secondary" id="badgeTotalQuestoes">Total: 0 questões</span>
+                                    </div>
+                                    <div class="border rounded p-3 bg-light shadow-sm">
+                                        <p class="text-muted small mb-3">Clique para <strong>ativar/desativar</strong> um tópico. Apenas questões dos tópicos ativos aparecerão na prova ou na lista.</p>
+                                        
+                                        <div id="container_topicos" class="d-flex flex-wrap gap-2"></div>
+                                        
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h5 class="mt-4 mb-3 text-secondary border-bottom pb-2">3. Método de Geração</h5>
+
+                            <div class="row bg-light p-3 rounded mb-3 mx-0">
+                                <div class="col-md-4 mb-3 mb-md-0">
+                                    <label class="form-label fw-bold">Nº de Versões (Provas diferentes):</label>
+                                    <input type="number" class="form-control" name="num_versoes" value="1" min="1">
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label fw-bold">Como as questões serão escolhidas?</label>
+                                    <select class="form-select border-warning" name="tipo_selecao" id="tipoSelecao">
+                                        <option value="aleatorio"> Aleatória (O sistema sorteia do banco)</option>
+                                        <option value="manual"> Manual (Eu vou escolher as questões)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row mb-4" id="areaNumQuestoes">
+                                <div class="col-md-12">
+                                    <label class="form-label fw-bold text-success">Quantidade de Questões a Sortear:</label>
+                                    <input type="number" class="form-control border-success" name="num_questoes" value="5" min="1">
+                                </div>
+                            </div>
+
+                            <div class="mb-4 d-none" id="areaSelecaoManual">
+                                <div class="row">
+                                    <div class="col-md-7">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label fw-bold text-primary mb-0">Catálogo de Questões:</label>
+                                            <span class="badge bg-success fs-6 shadow-sm" id="contadorQuestoes">0 selecionadas</span>
+                                        </div>
+                                        
+                                        <div class="mb-2">
+                                            <input type="text" id="inputPesquisa" class="form-control border-primary" placeholder="🔍 Buscar palavra-chave (ex: média, gráfico...)">
+                                        </div>
+
+                                        <div class="border rounded p-3 bg-white shadow-sm" style="height: 350px; overflow-y: auto;" id="listaQuestoes">
+                                            <p class="text-muted small text-center mt-5">Selecione uma disciplina acima.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-5 mt-4 mt-md-0">
+                                        <label class="form-label fw-bold text-secondary mb-2"> Questões Selecionadas:</label>
+                                        <ul class="list-group list-group-flush border rounded shadow-sm" id="resumoSelecionadas" style="height: 350px; overflow-y: auto;">
+                                            <li class="list-group-item text-muted small bg-light text-center mt-5 border-0">Ainda não há questões selecionadas.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-warning btn-lg fw-bold shadow" id="btnPrevia">
+                                    Avançar para Pré-visualização 
+                                </button>
+                            </div>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+    const disciplinaSelect = document.getElementById('disciplinaSelect');
+    const tipoSelecao = document.getElementById('tipoSelecao');
+    const areaSelecaoManual = document.getElementById('areaSelecaoManual');
+    const areaNumQuestoes = document.getElementById('areaNumQuestoes');
+    const listaQuestoes = document.getElementById('listaQuestoes');
+    const contadorQuestoes = document.getElementById('contadorQuestoes');
+    const resumoSelecionadas = document.getElementById('resumoSelecionadas');
+    const inputPesquisa = document.getElementById('inputPesquisa');
+    
+    const areaTopicos = document.getElementById('area_topicos');
+    const containerTopicos = document.getElementById('container_topicos');
+    const badgeTotalQuestoes = document.getElementById('badgeTotalQuestoes');
+    
+    let todasQuestoes = [];
+    let selecionadas = new Map(); 
+
+    tipoSelecao.addEventListener('change', function() {
+        if (this.value === 'manual') {
+            areaSelecaoManual.classList.remove('d-none');
+            areaNumQuestoes.classList.add('d-none');
+        } else {
+            areaSelecaoManual.classList.add('d-none');
+            areaNumQuestoes.classList.remove('d-none');
+        }
+    });
+
+    disciplinaSelect.addEventListener('change', function() {
+        const optionsSelecionadas = Array.from(this.selectedOptions).map(opt => opt.value);
+        
+        listaQuestoes.innerHTML = '<div class="text-center mt-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregando banco de questões...</p></div>';
+        todasQuestoes = [];
+        inputPesquisa.value = ''; 
+        
+        selecionadas.clear();
+        atualizarCarrinho();
+
+        if (optionsSelecionadas.length === 0) {
+            listaQuestoes.innerHTML = '<p class="text-muted small text-center mt-5">Selecione uma disciplina acima.</p>';
+            areaTopicos.style.display = 'none';
+            badgeTotalQuestoes.innerText = 'Total: 0 questões';
+            return;
+        }
+
+        const queryString = optionsSelecionadas.map(id => `disciplina_id[]=${id}`).join('&');
+
+        fetch(`/api/carregar-dados/?${queryString}`)
+            .then(response => response.json())
+            .then(data => {
+                areaTopicos.style.display = 'block';
+                containerTopicos.innerHTML = '';
+                badgeTotalQuestoes.innerText = `Total: ${data.total_questoes} questões no banco`;
+                
+                if (data.topicos.length === 0) {
+                    containerTopicos.innerHTML = '<p class="text-muted small w-100">Nenhum tópico cadastrado com questões.</p>';
+                } else {
+                    data.topicos.forEach(t => {
+                        containerTopicos.innerHTML += `
+                            <div>
+                                <input type="checkbox" class="btn-check topico-checkbox" id="topico_${t.id}" name="topicos" value="${t.id}" checked autocomplete="off">
+                                <label class="btn btn-outline-primary d-flex align-items-center shadow-sm" for="topico_${t.id}">
+                                    ${t.nome} <span class="badge bg-primary ms-2">${t.qtd_questoes}</span>
+                                </label>
+                            </div>
+                        `;
+                    });
+                }
+
+                document.querySelectorAll('.topico-checkbox').forEach(cb => {
+                    cb.addEventListener('change', filtrarQuestoes);
+                });
+
+                todasQuestoes = data.questoes;
+                filtrarQuestoes(); 
+            });
+    });
+
+    inputPesquisa.addEventListener('input', filtrarQuestoes);
+
+    function filtrarQuestoes() {
+        const termoBusca = inputPesquisa.value.toLowerCase();
+        const checkboxesMarcados = document.querySelectorAll('.topico-checkbox:checked');
+        const idsMarcados = Array.from(checkboxesMarcados).map(cb => parseInt(cb.value));
+
+        const filtradas = todasQuestoes.filter(q => {
+            const topicoAtivo = idsMarcados.includes(q.topico_id);
+            const termoAtivo = q.previa.toLowerCase().includes(termoBusca);
+            return topicoAtivo && termoAtivo; 
+        });
+        
+        renderizarQuestoes(filtradas);
+    }
+
+    listaQuestoes.addEventListener('change', function(e) {
+        if (e.target && e.target.classList.contains('check-questao')) {
+            const checkbox = e.target;
+            const idQuestao = checkbox.value;
+            const previaTexto = checkbox.getAttribute('data-previa');
+
+            if (checkbox.checked) {
+                selecionadas.set(idQuestao, previaTexto);
+            } else {
+                selecionadas.delete(idQuestao);
+            }
+            atualizarCarrinho();
+        }
+    });
+
+    // FUNÇÃO MÁGICA: Formata Tabelas e Gráficos do LaTeX apenas para leitura na Web
+    function formatarLaTeXWeb(texto) {
+        return texto
+            .replace(/\\begin\{tabular\}/g, '$$\\begin{array}')
+            .replace(/\\end\{tabular\}/g, '\\end{array}$$')
+            .replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '<br><span class="badge bg-info text-dark border">📊 Gráfico visível no PDF gerado</span><br>');
+    }
+
+    function renderizarQuestoes(questoesParaMostrar) {
+        if (questoesParaMostrar.length === 0) {
+            listaQuestoes.innerHTML = '<div class="alert alert-warning small mt-3">Nenhuma questão encontrada para estes filtros.</div>';
+            return;
+        }
+
+        listaQuestoes.innerHTML = '';
+        questoesParaMostrar.forEach(q => {
+            const isChecked = selecionadas.has(q.id.toString()) ? 'checked' : '';
+            const previaSegura = q.previa.replace(/"/g, '&quot;'); 
+            const previaParaTela = formatarLaTeXWeb(q.previa); // O Truque aplicado aqui!
+            
+            listaQuestoes.innerHTML += `
+                <div class="form-check border-bottom pb-2 mb-2 hover-bg-light p-2 rounded">
+                    <input class="form-check-input check-questao ms-1" type="checkbox" name="questoes_selecionadas" value="${q.id}" id="q_${q.id}" data-previa="${previaSegura}" ${isChecked}>
+                    <label class="form-check-label ms-2 cursor-pointer w-100" style="cursor: pointer;" for="q_${q.id}">
+                        <strong class="text-primary">#${q.id}</strong> - ${previaParaTela}
+                    </label>
+                </div>
+            `;
+        });
+
+        if (window.MathJax) {
+            MathJax.typesetPromise([listaQuestoes]).catch(function (err) {
+                console.log('MathJax erro de renderização: ', err.message);
+            });
+        }
+    }
+
+    function atualizarCarrinho() {
+        contadorQuestoes.innerText = `${selecionadas.size} selecionada(s)`;
+
+        if (selecionadas.size === 0) {
+            resumoSelecionadas.innerHTML = '<li class="list-group-item text-muted small bg-light text-center mt-5 border-0">Ainda não há questões selecionadas.</li>';
+        } else {
+            resumoSelecionadas.innerHTML = '';
+            selecionadas.forEach((previa, id) => {
+                const previaParaTela = formatarLaTeXWeb(previa); // O Truque aplicado aqui também!
+                resumoSelecionadas.innerHTML += `
+                    <li class="list-group-item small py-2 border-bottom hover-bg-light d-flex flex-column">
+                        <strong class="text-primary mb-1">#${id}</strong>
+                        <span class="" title="Visualização Web">${previaParaTela}</span>
+                    </li>`;
+            });
+
+            if (window.MathJax) {
+                MathJax.typesetPromise([resumoSelecionadas]).catch(function (err) {
+                    console.log('MathJax erro de renderização: ', err.message);
+                });
+            }
+        }
+    }
+});
+    </script>
+</body>
+</html>

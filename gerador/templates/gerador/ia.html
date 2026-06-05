@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>StatLab IA - Assistente</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script>
+        function preencherExemplo(texto) {
+            document.getElementById('prompt_usuario').value = texto;
+        }
+    </script>
+</head>
+<body class="bg-light">
+    <div class="container mt-5 mb-5">
+        <a href="{% url 'index' %}" class="btn btn-outline-secondary mb-3">← Voltar ao Início</a>
+        
+        <div class="card shadow border-0">
+            <div class="card-header bg-dark text-white p-3">
+                <h4 class="mb-0">StatLab Copilot</h4>
+            </div>
+            <div class="card-body p-4">
+                
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+
+                <form action="{% url 'gerador_ia' %}" method="POST">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold fs-5">Como posso ajudar com a sua prova hoje?</label>
+                        <textarea class="form-control" id="prompt_usuario" name="prompt_usuario" rows="4" placeholder="Ex: Preciso de uma prova de Análise de Variância com 2 questões abertas. Quero 2 versões diferentes (A e B) para evitar cola..."></textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <span class="text-muted small fw-bold">Sugestões de comandos:</span><br>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="preencherExemplo('Crie 3 questões de múltipla escolha sobre Teorema de Bayes, nível difícil, inspiradas no livro do Bussab.')">+ Múltipla Escolha (Bayes)</button>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-1" onclick="preencherExemplo('Faça uma questão aberta de Regressão Linear com itens A, B e C. Crie a Versão A e a Versão B mudando os valores.')">+ Questão Aberta (Regressão)</button>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg fw-bold" onclick="this.innerHTML='<span class=\'spinner-border spinner-border-sm\'></span> Processando e formatando em LaTeX...';">
+                            Gerar Prova
+                        </button>
+                    </div>
+                </form>
+
+                <hr class="my-5">
+
+                {% if prova_gerada %}
+                <h4 class="text-success mb-3">Prova Gerada. Revise o código abaixo:</h4>
+                <form action="#" method="POST">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="fw-bold text-primary">Código da Prova</label>
+                            <textarea class="form-control font-monospace" name="latex_prova" rows="15">{{ prova_gerada }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="fw-bold text-danger">Código do Gabarito</label>
+                            <textarea class="form-control font-monospace" name="latex_gabarito" rows="15">{{ gabarito_gerado }}</textarea>
+                        </div>
+                    </div>
+                    <div class="d-grid mt-4">
+                        <button type="button" class="btn btn-success btn-lg fw-bold" disabled>
+                            Baixar ZIP (PDF + .TEX) - PRÓXIMO PASSO
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>
