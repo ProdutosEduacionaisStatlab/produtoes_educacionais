@@ -23,4 +23,4 @@ COPY . .
 RUN python manage.py collectstatic --noinput
 
 # 7. O grande comando final: Roda o banco de dados e liga o site!
-CMD python manage.py migrate && gunicorn statlab.wsgi:application --bind 0.0.0.0:$PORT
+CMD ["gunicorn", "statlab.wsgi:application", "--bind", "0.0.0.0:8000", "--timeout", "120"]
