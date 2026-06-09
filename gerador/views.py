@@ -6,6 +6,12 @@ import io
 import re
 from datetime import datetime
 import google.generativeai as genai
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib import messages
+import PyPDF2
+import json
+import re
+
 
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
@@ -180,3 +186,66 @@ def gerar_provas(request):
     response = HttpResponse(buffer.getvalue(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename=Provas_Geradas_{nome_arquivo_zip}.zip'
     return response
+
+
+@staff_member_required
+def treinar_ia(request):
+    if request.method == 'POST' and request.FILES.get('arquivo'):
+        arquivo = request.FILES['arquivo']
+        texto_extraido = ""
+
+        # Lê o texto do PDF
+        if arquivo.name.endswith('.pdf'):
+            leitor = PyPDF2.PdfReader(arquivo)
+            for pagina in leitor.pages:
+                texto_extraido += pagina.extract_text()
+
+        # O Super Prompt para o Gemini fazer a engenharia reversa
+        prompt_treinamento = f"""
+        Você é um Engenheiro de Dados Educacionais. Leia esta lista de exercícios de estatística e extraia a estrutura matemática das questões.
+        Ignore cabeçalhos, números das questões e gabaritos.
+        Para cada tipo de questão diferente, crie um molde generalista.
+        
+        Devolva APENAS um código JSON válido (sem formatação markdown) neste formato:
+        [
+            {{
+                "topico": "Nome do Tópico (Ex: Probabilidade)",
+                "subtopico": "Nome do Subtópico (Ex: Teorema de Bayes)",
+                "enunciado_base": "O enunciado original com variáveis (X, Y, Z) no lugar dos números fixos",
+                "instrucoes_ia": "Regras para sortear X, Y e Z e a fórmula genérica para resolver"
+            }}
+        ]
+
+        Texto da lista de exercícios:
+        {texto_extraido}
+        """
+
+        try:
+            # Chama o Gemini
+            model = genai.GenerativeModel('gemini-1.5-pro')
+            resposta = model.generate_content(prompt_treinamento)
+            
+            # Limpa o texto caso o Gemini coloque ```json no começo
+            json_limpo = re.sub(r'```json|```', '', resposta.text).strip()
+            esqueletos = json.loads(json_limpo)
+
+            # Salva no Banco de Dados automaticamente!
+            novos_cadastros = 0
+            for item in esqueletos:
+                # Procura o tópico ou cria um novo se não existir
+                topico_obj, created = Topico.objects.get_or_create(nome=item['topico'])
+                
+                EsqueletoQuestao.objects.create(
+                    topico=topico_obj,
+                    subtopico=item['subtopico'],
+                    enunciado_base=item['enunciado_base'],
+                    instrucoes_ia=item['instrucoes_ia']
+                )
+                novos_cadastros += 1
+
+            messages.success(request, f"Sucesso! A IA leu o arquivo e cadastrou {novos_cadastros} novos esqueletos de questões no banco.")
+            
+        except Exception as e:
+            messages.error(request, f"Erro ao processar pela IA: {str(e)}")
+
+    return render(request, 'gerador/treinar.html')
