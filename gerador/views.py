@@ -1,193 +1,109 @@
 import os
-import subprocess
-import tempfile
-import zipfile
-import io
-import re
-from datetime import datetime
-import google.generativeai as genai
-from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib import messages
-import PyPDF2
 import json
 import re
-
-
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
+import PyPDF2
+from django.shortcuts import render
 from django.http import HttpResponse
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib import messages
+import google.generativeai as genai
 
 from .models import Curso, Topico, EsqueletoQuestao
 
-@login_required(login_url='/admin/login/')
+# ---------------------------------------------------------
+# CONFIGURAÇÃO DE SEGURANÇA DA API (Do seu código!)
+# ---------------------------------------------------------
+api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+if api_key:
+    genai.configure(api_key=api_key)
+else:
+    print("AVISO: Chave da API do Google não encontrada nas variáveis de ambiente!")
+
+modelo = genai.GenerativeModel('gemini-1.5-flash')
+
+
+# ---------------------------------------------------------
+# 1. PÁGINA INICIAL (O CONSTRUTOR LEGO)
+# ---------------------------------------------------------
 def index(request):
-    # Carrega os cursos e tópicos para o professor escolher na tela inicial
     cursos = Curso.objects.all()
     topicos = Topico.objects.all()
     return render(request, 'gerador/index.html', {'cursos': cursos, 'topicos': topicos})
 
-@login_required(login_url='/admin/login/')
+
+# ---------------------------------------------------------
+# 2. MOTOR DE GERAÇÃO DE PROVAS (RECEBE O MODO LEGO)
+# ---------------------------------------------------------
 def gerar_provas(request):
-    if request.method != 'POST':
-        return redirect('index')
+    if request.method == 'POST':
+        # Captura os dados gerais
+        curso_id = request.POST.get('curso')
+        curso = Curso.objects.get(id=curso_id) if curso_id else None
 
-    professor = request.POST.get('professor', '')
-    periodo = request.POST.get('periodo', '')
-    data_prova_str = request.POST.get('data_prova', '')
-    curso_id = request.POST.get('curso')
-    topicos_selecionados = request.POST.getlist('topicos')
-    num_questoes = int(request.POST.get('num_questoes', 3))
-    num_versoes = int(request.POST.get('num_versoes', 1))
+        # Captura as LISTAS enviadas pelos blocos de Lego
+        topicos_ids = request.POST.getlist('bloco_topico[]')
+        qtd_itens_lista = request.POST.getlist('bloco_qtd_itens[]')
+        formatos_lista = request.POST.getlist('bloco_formato[]')
 
-    data_formatada = ""
-    if data_prova_str:
-        data_formatada = datetime.strptime(data_prova_str, '%Y-%m-%d').strftime('%d/%m/%Y')
+        # Inicia a montagem do Super Prompt
+        contexto_prova = f"Crie uma avaliação de Estatística. Público-alvo: {curso.nome}. Contexto: {curso.descricao_contexto}\n\n"
+        instrucoes_questoes = ""
 
-    try:
-        curso_escolhido = Curso.objects.get(id=curso_id)
-    except Curso.DoesNotExist:
-        messages.error(request, "Por favor, selecione um curso válido.")
-        return redirect('index')
-
-    # Filtra os esqueletos baseados nos tópicos escolhidos
-    esqueletos_db = list(EsqueletoQuestao.objects.filter(topico_id__in=topicos_selecionados).order_by('?')[:num_questoes])
-
-    if not esqueletos_db:
-        messages.error(request, "Nenhum esqueleto de questão encontrado para os tópicos selecionados.")
-        return redirect('index')
-
-    # Configura a IA
-    api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-    genai.configure(api_key=api_key)
-    modelo = genai.GenerativeModel('gemini-1.5-flash')
-
-    nome_arquivo_zip = curso_escolhido.nome.replace(" ", "_")
-
-    # Seu Template LaTeX Original (Adaptado para questões abertas)
-    BASE_CONFIG = r"""
-\documentclass[11pt,a4paper]{article}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath, amssymb}
-\usepackage{mathpazo} 
-\linespread{1.15} 
-\usepackage{geometry}
-\usepackage{enumitem}
-\geometry{margin=2cm}
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{0.3em}
-\begin{document}
-"""
-
-    TEMPLATE_PROVA = BASE_CONFIG + r"""
-\begin{center}
-    {\large \textbf{UNIVERSIDADE FEDERAL DO CEARÁ}} \\[0.1cm]
-    {\large \textbf{DEPARTAMENTO DE ESTATÍSTICA E MATEMÁTICA APLICADA}} \\[0.3cm]
-   {\large \textbf{Avaliação Oficial de Estatística - <<CURSO>>}}
-\end{center}
-\vspace{0.2cm}\hrule\vspace{0.4cm}
-\noindent \textbf{Professor:} <<PROFESSOR>> \hfill \textbf{Semestre:} <<PERIODO>> \hfill \textbf{Data:} <<DATA>>
-\vspace{0.4cm}
-\noindent \textbf{Aluno(a):} \rule{8cm}{0.5pt} \hfill \textbf{Matrícula:} \rule{2.5cm}{0.5pt} \hfill \textbf{Versão:} <<VERSAO>>
-\vspace{0.4cm}\hrule\vspace{0.6cm}
-\begin{enumerate}[label=\textbf{\arabic*.}, leftmargin=*]
-<<QUESTOES>>
-\end{enumerate}
-\end{document}
-"""
-
-    buffer = io.BytesIO()
-
-    with tempfile.TemporaryDirectory() as temp_dir:
-        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Loop passando por cada bloco de Lego que o professor adicionou
+        for i in range(len(topicos_ids)):
+            if not topicos_ids[i]: 
+                continue # Pula se o bloco estiver vazio
             
-            latex_gabarito_global = ""
-
-            for versao in range(1, num_versoes + 1):
-                latex_questoes = ""
-                latex_gabarito_global += f"\\subsection*{{Gabarito - Versão {versao}}}\n\\begin{{enumerate}}[label=\\textbf{{\\arabic*.}}, leftmargin=*]\n"
-                
-                # Para cada esqueleto, pedimos para a IA gerar uma variação única
-                for q in esqueletos_db:
-                    prompt = f"""
-                    Você é um gerador de provas de estatística em LaTeX.
-                    Gere UMA questão baseada na seguinte estrutura, mas contextualizada para alunos de {curso_escolhido.nome} ({curso_escolhido.descricao_contexto}).
-                    
-                    ESTRUTURA BASE: {q.enunciado_base}
-                    INSTRUÇÕES: {q.instrucoes_ia}
-                    
-                    Formate a saída EXATAMENTE em dois blocos de texto puro, separados pela palavra "DIVISOR_GABARITO".
-                    Não use blocos de código Markdown (```latex). Apenas o texto.
-                    Use notação LaTeX para matemática ($ ou $$).
-                    
-                    Exemplo do formato esperado:
-                    O enunciado da questão aqui com variáveis sorteadas.
-                    DIVISOR_GABARITO
-                    A resolução detalhada aqui com os cálculos.
-                    """
-                    
-                    resposta = modelo.generate_content(prompt).text
-                    
-                    # Separa o enunciado da resolução
-                    partes = resposta.split("DIVISOR_GABARITO")
-                    enunciado_gerado = partes[0].strip()
-                    resolucao_gerada = partes[1].strip() if len(partes) > 1 else "Resolução indisponível."
-
-                    # Adiciona na Prova
-                    latex_questoes += f"\\item {enunciado_gerado}\n\n\\vspace{{3cm}}\n\n"
-                    
-                    # Adiciona no Gabarito
-                    latex_gabarito_global += f"\\item \\textbf{{Enunciado:}} {enunciado_gerado}\n\n\\textbf{{Resolução:}} {resolucao_gerada}\n\n\\vspace{{1cm}}\n"
-
-                latex_gabarito_global += "\\end{enumerate}\n\\newpage\n"
-
-                # Compila a prova PDF
-                conteudo_tex = TEMPLATE_PROVA.replace("<<CURSO>>", curso_escolhido.nome)
-                conteudo_tex = conteudo_tex.replace("<<PROFESSOR>>", professor)
-                conteudo_tex = conteudo_tex.replace("<<PERIODO>>", periodo)
-                conteudo_tex = conteudo_tex.replace("<<DATA>>", data_formatada)
-                conteudo_tex = conteudo_tex.replace("<<VERSAO>>", str(versao))
-                conteudo_tex = conteudo_tex.replace("<<QUESTOES>>", latex_questoes)
-
-                tex_file = f"prova_versao_{versao}.tex"
-                tex_path = os.path.join(temp_dir, tex_file)
-
-                with open(tex_path, "w", encoding="utf-8") as f:
-                    f.write(conteudo_tex)
-
-                subprocess.run(['pdflatex', '-interaction=nonstopmode', tex_file], cwd=temp_dir, capture_output=True)
-
-                pdf_path = tex_path.replace(".tex", ".pdf")
-                if os.path.exists(pdf_path):
-                    zip_file.write(pdf_path, f"Prova_{nome_arquivo_zip}_V{versao}.pdf")
-
-            # Compila o Gabarito Unificado
-            conteudo_gab = BASE_CONFIG + r"""
-\begin{center}
-    {\large \textbf{UNIVERSIDADE FEDERAL DO CEARÁ}} \\[0.1cm]
-    {\large \textbf{Gabarito Unificado - <<CURSO>>}}
-\end{center}
-\vspace{0.4cm}\hrule\vspace{0.6cm}
-<<CONTEUDO_GABARITO>>
-\end{document}
-"""
-            conteudo_gab = conteudo_gab.replace("<<CURSO>>", curso_escolhido.nome)
-            conteudo_gab = conteudo_gab.replace("<<CONTEUDO_GABARITO>>", latex_gabarito_global)
+            topico_base = Topico.objects.get(id=topicos_ids[i])
+            # Sorteia um esqueleto qualquer dentro deste tópico no banco
+            esqueleto = EsqueletoQuestao.objects.filter(topico=topico_base).order_by('?').first()
             
-            gab_path = os.path.join(temp_dir, "Gabaritos.tex")
-            with open(gab_path, "w", encoding="utf-8") as f:
-                f.write(conteudo_gab)
-                
-            subprocess.run(['pdflatex', '-interaction=nonstopmode', "Gabaritos.tex"], cwd=temp_dir, capture_output=True)
-            if os.path.exists(os.path.join(temp_dir, "Gabaritos.pdf")):
-                zip_file.write(os.path.join(temp_dir, "Gabaritos.pdf"), "Gabaritos_Todas_Versoes.pdf")
+            qtd_itens = int(qtd_itens_lista[i])
+            formato = formatos_lista[i]
 
-    response = HttpResponse(buffer.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename=Provas_Geradas_{nome_arquivo_zip}.zip'
-    return response
+            instrucoes_questoes += f"--- Questão {i+1} ---\n"
+            instrucoes_questoes += f"Tópico: {topico_base.nome}\n"
+            
+            if esqueleto:
+                instrucoes_questoes += f"Base Matemática: {esqueleto.enunciado_base}\n"
+                instrucoes_questoes += f"Regras de Sorteio dos Números: {esqueleto.instrucoes_ia}\n"
+            
+            # Aplica as regras de formato que o professor escolheu na tela
+            if qtd_itens > 0:
+                instrucoes_questoes += f"Formato Exigido: Crie {qtd_itens} subitens (a, b, c...) do tipo {formato}.\n\n"
+            else:
+                instrucoes_questoes += f"Formato Exigido: Questão direta (sem subitens), do tipo {formato}.\n\n"
+
+        prompt_final = f"""
+        Você é um professor universitário de estatística experiente.
+        Crie as questões usando EXATAMENTE as regras matemáticas e de formato abaixo.
+        
+        {contexto_prova}
+        
+        ESTRUTURA DAS QUESTÕES:
+        {instrucoes_questoes}
+        
+        Escreva a prova inteira em código LaTeX limpo, pronto para compilar. 
+        Não use markdown como ```latex, devolva apenas o texto puro do código.
+        """
+
+        try:
+            resposta = modelo.generate_content(
+    		prompt_final, # ou prompt_treinamento na outra função
+    		generation_config=genai.types.GenerationConfig(temperature=0.3))
+            
+            # Por enquanto, retorna o LaTeX puro na tela para podermos copiar e testar no Overleaf
+            return HttpResponse(f"<pre style='white-space: pre-wrap; padding: 20px;'>{resposta.text}</pre>")
+            
+        except Exception as e:
+            return HttpResponse(f"<h3>Erro na IA:</h3> <p>{str(e)}</p>")
+
+    return render(request, 'gerador/index.html')
 
 
+# ---------------------------------------------------------
+# 3. SALA DE TREINAMENTO (LEITOR DE PDF DO ADMIN)
+# ---------------------------------------------------------
 @staff_member_required
 def treinar_ia(request):
     if request.method == 'POST' and request.FILES.get('arquivo'):
@@ -206,7 +122,7 @@ def treinar_ia(request):
         Ignore cabeçalhos, números das questões e gabaritos.
         Para cada tipo de questão diferente, crie um molde generalista.
         
-        Devolva APENAS um código JSON válido (sem formatação markdown) neste formato:
+        Devolva APENAS um código JSON válido (sem formatação markdown) neste formato exato:
         [
             {{
                 "topico": "Nome do Tópico (Ex: Probabilidade)",
@@ -221,18 +137,15 @@ def treinar_ia(request):
         """
 
         try:
-            # Chama o Gemini
-            model = genai.GenerativeModel('gemini-1.5-pro')
-            resposta = model.generate_content(prompt_treinamento)
+            resposta = modelo.generate_content(prompt_treinamento)
             
-            # Limpa o texto caso o Gemini coloque ```json no começo
+            # Limpa o texto caso o Gemini coloque markdown
             json_limpo = re.sub(r'```json|```', '', resposta.text).strip()
             esqueletos = json.loads(json_limpo)
 
-            # Salva no Banco de Dados automaticamente!
+            # Salva no Banco de Dados
             novos_cadastros = 0
             for item in esqueletos:
-                # Procura o tópico ou cria um novo se não existir
                 topico_obj, created = Topico.objects.get_or_create(nome=item['topico'])
                 
                 EsqueletoQuestao.objects.create(
@@ -243,7 +156,7 @@ def treinar_ia(request):
                 )
                 novos_cadastros += 1
 
-            messages.success(request, f"Sucesso! A IA leu o arquivo e cadastrou {novos_cadastros} novos esqueletos de questões no banco.")
+            messages.success(request, f"Sucesso! A IA leu o PDF e cadastrou {novos_cadastros} novos esqueletos no banco.")
             
         except Exception as e:
             messages.error(request, f"Erro ao processar pela IA: {str(e)}")
