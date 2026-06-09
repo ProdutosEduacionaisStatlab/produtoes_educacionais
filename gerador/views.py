@@ -19,8 +19,7 @@ if api_key:
 else:
     print("AVISO: Chave da API do Google não encontrada nas variáveis de ambiente!")
 
-modelo = genai.GenerativeModel('gemini-1.5-flash')
-
+modelo = genai.GenerativeModel('gemini-2.5-flash')
 
 # ---------------------------------------------------------
 # 1. PÁGINA INICIAL (O CONSTRUTOR LEGO)
