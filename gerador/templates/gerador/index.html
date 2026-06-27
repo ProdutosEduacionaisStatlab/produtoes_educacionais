@@ -19,7 +19,8 @@
 
     <div class="container mt-5 mb-5">
         <div class="row justify-content-center">
-            <div class="col-md-9"> <div class="card shadow border-0 rounded-3">
+            <div class="col-md-9"> 
+                <div class="card shadow border-0 rounded-3">
                     <div class="card-header bg-primary text-white py-3">
                         <h4 class="mb-0 fw-bold">Construtor de Avaliações </h4>
                     </div>
@@ -49,14 +50,22 @@
                             </div>
 
                             <h5 class="mb-3 text-primary border-top pt-3">2. Contexto</h5>
-                            <div class="mb-4">
-                                <label class="form-label"><b>Selecione o Curso (Público-Alvo):</b></label>
-                                <select name="curso" class="form-control border-primary" required>
-                                    <option value="">-- Escolha um curso --</option>
-                                    {% for c in cursos %}
-                                        <option value="{{ c.id }}">{{ c.nome }}</option>
-                                    {% endfor %}
-                                </select>
+                            <div class="row mb-4">
+                                <div class="col-md-6 mb-2">
+                                    <label for="nivel" class="form-label"><b>1. Nível de Escolaridade:</b></label>
+                                    <select id="nivel" name="nivel" class="form-select border-primary" onchange="filtrarCursos()" required>
+                                        <option value="">Selecione o Nível...</option>
+                                        <option value="fundamental">Ensino Fundamental</option>
+                                        <option value="medio">Ensino Médio</option>
+                                        <option value="superior">Ensino Superior</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <label for="curso" class="form-label"><b>2. Curso / Contexto:</b></label>
+                                    <select id="curso" name="curso" class="form-select border-primary" disabled required>
+                                        <option value="">Selecione primeiro o nível...</option>
+                                        </select>
+                                </div>
                             </div>
 
                             <h5 class="mb-3 text-primary border-top pt-3 d-flex justify-content-between align-items-center">
@@ -79,6 +88,47 @@
     </div>
 
     <script>
+        // -------------------------------------------------------------
+        // LÓGICA DO FILTRO DE CURSOS (NÍVEL -> CURSO)
+        // -------------------------------------------------------------
+        const cursosData = [
+            {% for c in cursos %}
+            { id: "{{ c.id }}", nome: "{{ c.nome }}", nivel: "{{ c.nivel }}" },
+            {% endfor %}
+        ];
+
+        function filtrarCursos() {
+            const nivelSelect = document.getElementById('nivel');
+            const cursoSelect = document.getElementById('curso');
+            const nivelSelecionado = nivelSelect.value;
+
+            // Limpa a caixa de cursos
+            cursoSelect.innerHTML = '<option value="">Selecione o curso/contexto...</option>';
+
+            if (nivelSelecionado) {
+                // Desbloqueia a caixa de cursos
+                cursoSelect.disabled = false;
+                
+                // Filtra os cursos pelo nível
+                const cursosFiltrados = cursosData.filter(c => c.nivel === nivelSelecionado);
+                
+                // Adiciona as opções filtradas
+                cursosFiltrados.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.id;
+                    option.textContent = c.nome;
+                    cursoSelect.appendChild(option);
+                });
+            } else {
+                // Bloqueia novamente se voltar ao padrão
+                cursoSelect.disabled = true;
+                cursoSelect.innerHTML = '<option value="">Selecione primeiro o nível...</option>';
+            }
+        }
+
+        // -------------------------------------------------------------
+        // LÓGICA DE ADICIONAR/REMOVER BLOCOS DE QUESTÕES (LEGO)
+        // -------------------------------------------------------------
         let contadorQuestoes = 0;
 
         function adicionarBloco() {

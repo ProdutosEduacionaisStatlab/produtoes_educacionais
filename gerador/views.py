@@ -6,20 +6,20 @@ from django.shortcuts import render
 from django.http import HttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
-import google.generativeai as genai
-
+from openai import OpenAI
 from .models import Curso, Topico, EsqueletoQuestao
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE SEGURANÇA DA API (Do seu código!)
+# CONFIGURAÇÃO DA IA (NVIDIA NIM - DeepSeek R1)
 # ---------------------------------------------------------
-api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
-else:
-    print("AVISO: Chave da API do Google não encontrada nas variáveis de ambiente!")
+# Cole a sua chave gerada no site build.nvidia.com aqui dentro das aspas:
+api_key =os.environ.get("NVIDIA_API_KEY")
 
-modelo = genai.GenerativeModel('gemini-2.5-flash')
+client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key=api_key
+)
+
 
 # ---------------------------------------------------------
 # 1. PÁGINA INICIAL (O CONSTRUTOR LEGO)
@@ -50,23 +50,23 @@ def gerar_provas(request):
 
         # Loop passando por cada bloco de Lego que o professor adicionou
         for i in range(len(topicos_ids)):
-            if not topicos_ids[i]: 
-                continue # Pula se o bloco estiver vazio
-            
+            if not topicos_ids[i]:
+                continue  # Pula se o bloco estiver vazio
+
             topico_base = Topico.objects.get(id=topicos_ids[i])
             # Sorteia um esqueleto qualquer dentro deste tópico no banco
             esqueleto = EsqueletoQuestao.objects.filter(topico=topico_base).order_by('?').first()
-            
+
             qtd_itens = int(qtd_itens_lista[i])
             formato = formatos_lista[i]
 
-            instrucoes_questoes += f"--- Questão {i+1} ---\n"
+            instrucoes_questoes += f"--- Questão {i + 1} ---\n"
             instrucoes_questoes += f"Tópico: {topico_base.nome}\n"
-            
+
             if esqueleto:
                 instrucoes_questoes += f"Base Matemática: {esqueleto.enunciado_base}\n"
                 instrucoes_questoes += f"Regras de Sorteio dos Números: {esqueleto.instrucoes_ia}\n"
-            
+
             # Aplica as regras de formato que o professor escolheu na tela
             if qtd_itens > 0:
                 instrucoes_questoes += f"Formato Exigido: Crie {qtd_itens} subitens (a, b, c...) do tipo {formato}.\n\n"
@@ -76,24 +76,32 @@ def gerar_provas(request):
         prompt_final = f"""
         Você é um professor universitário de estatística experiente.
         Crie as questões usando EXATAMENTE as regras matemáticas e de formato abaixo.
-        
+
         {contexto_prova}
-        
+
         ESTRUTURA DAS QUESTÕES:
         {instrucoes_questoes}
-        
+
         Escreva a prova inteira em código LaTeX limpo, pronto para compilar. 
         Não use markdown como ```latex, devolva apenas o texto puro do código.
         """
 
         try:
-            resposta = modelo.generate_content(
-    		prompt_final, # ou prompt_treinamento na outra função
-    		generation_config=genai.types.GenerationConfig(temperature=0.3))
-            
-            # Por enquanto, retorna o LaTeX puro na tela para podermos copiar e testar no Overleaf
-            return HttpResponse(f"<pre style='white-space: pre-wrap; padding: 20px;'>{resposta.text}</pre>")
-            
+            # NOVA CHAMADA PARA A NVIDIA (DeepSeek R1)
+            resposta_completa = client.chat.completions.create(
+                model="deepseek-ai/deepseek-v4-pro",
+                messages=[{"role": "user", "content": prompt_final}],
+                temperature=0.3,
+                max_tokens=4096
+            )
+
+            texto_bruto = resposta_completa.choices[0].message.content
+            # Remove a tag <think> gerada pelo DeepSeek para exibir apenas o LaTeX
+            resposta_final = re.sub(r'<think>.*?</think>', '', texto_bruto, flags=re.DOTALL).strip()
+
+            # Retorna o LaTeX puro na tela
+            return HttpResponse(f"<pre style='white-space: pre-wrap; padding: 20px;'>{resposta_final}</pre>")
+
         except Exception as e:
             return HttpResponse(f"<h3>Erro na IA:</h3> <p>{str(e)}</p>")
 
@@ -115,12 +123,12 @@ def treinar_ia(request):
             for pagina in leitor.pages:
                 texto_extraido += pagina.extract_text()
 
-        # O Super Prompt para o Gemini fazer a engenharia reversa
+        # O Super Prompt para a engenharia reversa
         prompt_treinamento = f"""
         Você é um Engenheiro de Dados Educacionais. Leia esta lista de exercícios de estatística e extraia a estrutura matemática das questões.
         Ignore cabeçalhos, números das questões e gabaritos.
         Para cada tipo de questão diferente, crie um molde generalista.
-        
+
         Devolva APENAS um código JSON válido (sem formatação markdown) neste formato exato:
         [
             {{
@@ -136,17 +144,27 @@ def treinar_ia(request):
         """
 
         try:
-            resposta = modelo.generate_content(prompt_treinamento)
-            
-            # Limpa o texto caso o Gemini coloque markdown
-            json_limpo = re.sub(r'```json|```', '', resposta.text).strip()
+            # NOVA CHAMADA PARA A NVIDIA (DeepSeek R1)
+            resposta_completa = client.chat.completions.create(
+                model="deepseek-ai/deepseek-r1",
+                messages=[{"role": "user", "content": prompt_treinamento}],
+                temperature=0.3,
+                max_tokens=4096
+            )
+
+            texto_bruto = resposta_completa.choices[0].message.content
+            # Remove a tag <think>
+            texto_sem_think = re.sub(r'<think>.*?</think>', '', texto_bruto, flags=re.DOTALL).strip()
+
+            # Limpa o texto caso a IA coloque markdown de JSON
+            json_limpo = re.sub(r'```json|```', '', texto_sem_think).strip()
             esqueletos = json.loads(json_limpo)
 
             # Salva no Banco de Dados
             novos_cadastros = 0
             for item in esqueletos:
                 topico_obj, created = Topico.objects.get_or_create(nome=item['topico'])
-                
+
                 EsqueletoQuestao.objects.create(
                     topico=topico_obj,
                     subtopico=item['subtopico'],
@@ -155,8 +173,9 @@ def treinar_ia(request):
                 )
                 novos_cadastros += 1
 
-            messages.success(request, f"Sucesso! A IA leu o PDF e cadastrou {novos_cadastros} novos esqueletos no banco.")
-            
+            messages.success(request,
+                             f"Sucesso! A IA leu o PDF e cadastrou {novos_cadastros} novos esqueletos no banco.")
+
         except Exception as e:
             messages.error(request, f"Erro ao processar pela IA: {str(e)}")
 
