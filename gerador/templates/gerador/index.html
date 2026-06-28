@@ -3,185 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StatLab IA - Construtor de Avaliações</title>
+    <title>StatLab</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root { --primary-soft: #4f46e5; --bg-app: #f8fafc; }
+        body { background-color: var(--bg-app); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .sidebar { background: #1e293b; color: white; min-height: 100vh; padding-top: 20px; }
+        .card-dashboard { border-radius: 16px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .card-header-custom { background-color: #ffffff; border-bottom: 1px solid #e1dfdd; padding: 15px 20px; border-radius: 16px 16px 0 0; }
+        .slicer-box { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
+        .slicer-label { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block; }
+        .btn-add { background: var(--primary-soft); color: white; border-radius: 8px; transition: 0.3s; font-weight: 600; }
+        .btn-add:hover { background: #4338ca; color: white; transform: translateY(-2px); }
+    </style>
 </head>
-<body class="bg-light">
+<body>
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="{% url 'index' %}">✨ StatLab IA</a>
-            <div class="d-flex">
-                <a href="/admin/" class="btn btn-outline-light btn-sm" target="_blank">⚙️ Painel Admin</a>
+<div class="container-fluid">
+    <div class="row">
+        <nav class="col-md-2 sidebar shadow-lg">
+            <h4 class="px-4 fw-bold mb-4 text-indigo-400"> StatLab</h4>
+            <ul class="nav flex-column px-2">
+                <li class="nav-item mb-2">
+                    <a class="nav-link text-white bg-secondary bg-opacity-25 rounded" href="{% url 'index' %}">📊 Construtor</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-white-50" href="/admin/" target="_blank">⚙️ Configurações</a>
+                </li>
+            </ul>
+        </nav>
+
+        <main class="col-md-10 py-5 px-5">
+            <div class="mb-5">
+                <h2 class="fw-bold text-dark">Workspace de Avaliações</h2>
+                <p class="text-muted">Configure sua prova e gere o conteúdo automaticamente.</p>
             </div>
-        </div>
-    </nav>
 
-    <div class="container mt-5 mb-5">
-        <div class="row justify-content-center">
-            <div class="col-md-9"> 
-                <div class="card shadow border-0 rounded-3">
-                    <div class="card-header bg-primary text-white py-3">
-                        <h4 class="mb-0 fw-bold">Construtor de Avaliações </h4>
+            <form action="{% url 'gerar_provas' %}" method="POST">
+                {% csrf_token %}
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="slicer-box">
+                            <label class="slicer-label">Professor</label>
+                            <input type="text" name="professor" class="form-control form-control-sm" value="Eduardo Pontes">
+                        </div>
+                        <div class="slicer-box">
+                            <label class="slicer-label">Período</label>
+                            <input type="text" name="periodo" class="form-control form-control-sm" value="2026.1">
+                        </div>
+                        <div class="slicer-box">
+                            <label class="slicer-label">Nível de Escolaridade</label>
+                            <select id="nivel" name="nivel" class="form-select form-select-sm" onchange="filtrarCursos()" required>
+                                <option value="">Selecione...</option>
+                                <option value="fundamental">Ensino Fundamental</option>
+                                <option value="medio">Ensino Médio</option>
+                                <option value="superior">Ensino Superior</option>
+                            </select>
+                        </div>
+                        <div class="slicer-box">
+                            <label class="slicer-label">Contexto Alvo</label>
+                            <select id="curso" name="curso" class="form-select form-select-sm" disabled required>
+                                <option value="">Aguardando nível...</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="card-body p-4">
-                        
-                        <form action="{% url 'gerar_provas' %}" method="POST">
-                            {% csrf_token %}
-                            
-                            <h5 class="mb-3 text-primary">1. Cabeçalho</h5>
-                            <div class="row mb-4">
-                                <div class="col-md-12 mb-2">
-                                    <label class="form-label"><b>Nome do Professor:</b></label>
-                                    <input type="text" name="professor" class="form-control bg-light" value="Eduardo Pontes">
-                                </div>
-                                <div class="col-md-4 mb-2">
-                                    <label class="form-label"><b>Período/Semestre:</b></label>
-                                    <input type="text" name="periodo" class="form-control bg-light" value="2026.1">
-                                </div>
-                                <div class="col-md-4 mb-2">
-                                    <label class="form-label"><b>Data da Prova:</b></label>
-                                    <input type="date" name="data_prova" class="form-control" required>
-                                </div>
-                                <div class="col-md-4 mb-2">
-                                    <label class="form-label"><b>Versões Diferentes:</b></label>
-                                    <input type="number" name="num_versoes" class="form-control border-success" value="1" min="1" required>
-                                </div>
+
+                    <div class="col-md-8">
+                        <div class="card card-dashboard">
+                            <div class="card-header-custom d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0 fw-bold text-primary">Estrutura do Documento</h6>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="adicionarBloco()">+ Questão</button>
                             </div>
-
-                            <h5 class="mb-3 text-primary border-top pt-3">2. Contexto</h5>
-                            <div class="row mb-4">
-                                <div class="col-md-6 mb-2">
-                                    <label for="nivel" class="form-label"><b>1. Nível de Escolaridade:</b></label>
-                                    <select id="nivel" name="nivel" class="form-select border-primary" onchange="filtrarCursos()" required>
-                                        <option value="">Selecione o Nível...</option>
-                                        <option value="fundamental">Ensino Fundamental</option>
-                                        <option value="medio">Ensino Médio</option>
-                                        <option value="superior">Ensino Superior</option>
-                                    </select>
+                            <div class="card-body p-4" id="area-blocos-lego">
                                 </div>
-                                <div class="col-md-6 mb-2">
-                                    <label for="curso" class="form-label"><b>2. Curso / Contexto:</b></label>
-                                    <select id="curso" name="curso" class="form-select border-primary" disabled required>
-                                        <option value="">Selecione primeiro o nível...</option>
-                                        </select>
-                                </div>
-                            </div>
-
-                            <h5 class="mb-3 text-primary border-top pt-3 d-flex justify-content-between align-items-center">
-                                3. Construtor da Prova
-                                <button type="button" class="btn btn-sm btn-success fw-bold shadow-sm" onclick="adicionarBloco()">
-                                    + Adicionar Questão
-                                </button>
-                            </h5>
-
-                            <div id="area-blocos-lego" class="mb-4">
-                                </div>
-
-                            <button type="submit" class="btn btn-primary btn-lg w-100 shadow fw-bold mt-2">✨ Gerar Avaliação </button>
-                        </form>
-
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // -------------------------------------------------------------
-        // LÓGICA DO FILTRO DE CURSOS (NÍVEL -> CURSO)
-        // -------------------------------------------------------------
-        const cursosData = [
-            {% for c in cursos %}
-            { id: "{{ c.id }}", nome: "{{ c.nome }}", nivel: "{{ c.nivel }}" },
-            {% endfor %}
-        ];
-
-        function filtrarCursos() {
-            const nivelSelect = document.getElementById('nivel');
-            const cursoSelect = document.getElementById('curso');
-            const nivelSelecionado = nivelSelect.value;
-
-            // Limpa a caixa de cursos
-            cursoSelect.innerHTML = '<option value="">Selecione o curso/contexto...</option>';
-
-            if (nivelSelecionado) {
-                // Desbloqueia a caixa de cursos
-                cursoSelect.disabled = false;
-                
-                // Filtra os cursos pelo nível
-                const cursosFiltrados = cursosData.filter(c => c.nivel === nivelSelecionado);
-                
-                // Adiciona as opções filtradas
-                cursosFiltrados.forEach(c => {
-                    const option = document.createElement('option');
-                    option.value = c.id;
-                    option.textContent = c.nome;
-                    cursoSelect.appendChild(option);
-                });
-            } else {
-                // Bloqueia novamente se voltar ao padrão
-                cursoSelect.disabled = true;
-                cursoSelect.innerHTML = '<option value="">Selecione primeiro o nível...</option>';
-            }
-        }
-
-        // -------------------------------------------------------------
-        // LÓGICA DE ADICIONAR/REMOVER BLOCOS DE QUESTÕES (LEGO)
-        // -------------------------------------------------------------
-        let contadorQuestoes = 0;
-
-        function adicionarBloco() {
-            contadorQuestoes++;
-            const areaBlocos = document.getElementById('area-blocos-lego');
-            
-            const blocoHTML = `
-                <div class="card border-primary mb-3 shadow-sm" id="bloco-${contadorQuestoes}">
-                    <div class="card-header bg-primary text-white d-flex justify-content-between py-2">
-                        <strong>Questão ${contadorQuestoes}</strong>
-                        <button type="button" class="btn btn-sm btn-danger py-0" onclick="removerBloco(${contadorQuestoes})">X</button>
-                    </div>
-                    <div class="card-body bg-light">
-                        <div class="row">
-                            <div class="col-md-6 mb-2">
-                                <label class="form-label small fw-bold">Tópico Base:</label>
-                                <select name="bloco_topico[]" class="form-select border-primary" required>
-                                    <option value="">-- Escolha --</option>
-                                    {% for t in topicos %}
-                                        <option value="{{ t.id }}">{{ t.nome }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-3 mb-2">
-                                <label class="form-label small fw-bold">Nº de Subitens (a,b,c):</label>
-                                <input type="number" name="bloco_qtd_itens[]" class="form-control" value="0" min="0" max="26" title="Deixe 0 para questão direta">
-                            </div>
-                            <div class="col-md-3 mb-2">
-                                <label class="form-label small fw-bold">Formato:</label>
-                                <select name="bloco_formato[]" class="form-select" required>
-                                    <option value="aberta">Aberta</option>
-                                    <option value="multipla">Múltipla Escolha</option>
-                                </select>
+                            <div class="card-footer bg-white border-0 p-4">
+                                <button type="submit" class="btn btn-success btn-lg w-100 py-3 fw-bold">GERAR PDF E GABARITO</button>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
-            
-            areaBlocos.insertAdjacentHTML('beforeend', blocoHTML);
-        }
+            </form>
+        </main>
+    </div>
+</div>
 
-        function removerBloco(id) {
-            const bloco = document.getElementById(`bloco-${id}`);
-            if (bloco) {
-                bloco.remove();
-            }
-        }
+<script>
+    const cursosData = [
+        {% for c in cursos %}
+        { id: "{{ c.id }}", nome: "{{ c.nome }}", nivel: "{{ c.nivel }}" },
+        {% endfor %}
+    ];
 
-        // Já cria o primeiro bloco automaticamente ao abrir a página
-        window.onload = function() {
-            adicionarBloco();
-        };
-    </script>
+    function filtrarCursos() {
+        const nivelSelect = document.getElementById('nivel');
+        const cursoSelect = document.getElementById('curso');
+        const nivelSelecionado = nivelSelect.value;
+        cursoSelect.innerHTML = '<option value="">Selecione...</option>';
+        if (nivelSelecionado) {
+            cursoSelect.disabled = false;
+            const cursosFiltrados = cursosData.filter(c => c.nivel === nivelSelecionado);
+            cursosFiltrados.forEach(c => {
+                const option = document.createElement('option');
+                option.value = c.id;
+                option.textContent = c.nome;
+                cursoSelect.appendChild(option);
+            });
+        } else {
+            cursoSelect.disabled = true;
+        }
+    }
+
+    let contadorQuestoes = 0;
+    function adicionarBloco() {
+        contadorQuestoes++;
+        const areaBlocos = document.getElementById('area-blocos-lego');
+        const blocoHTML = `
+            <div class="p-3 mb-3 border rounded bg-light" id="bloco-${contadorQuestoes}">
+                <div class="d-flex justify-content-between mb-2">
+                    <strong class="text-secondary small">QUESTÃO ${contadorQuestoes}</strong>
+                    <button type="button" class="btn-close btn-sm" onclick="removerBloco(${contadorQuestoes})"></button>
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <select name="bloco_topico[]" class="form-select form-select-sm" required>
+                            <option value="">Tópico...</option>
+                            {% for t in topicos %}
+                                <option value="{{ t.id }}">{{ t.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" name="bloco_qtd_itens[]" class="form-control form-control-sm" placeholder="Itens" value="0">
+                    </div>
+                    <div class="col-md-4">
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="formato_${contadorQuestoes}" id="a_${contadorQuestoes}" value="aberta" checked>
+                            <label class="btn btn-outline-secondary btn-sm" for="a_${contadorQuestoes}">Aberta</label>
+                            <input type="radio" class="btn-check" name="formato_${contadorQuestoes}" id="m_${contadorQuestoes}" value="multipla">
+                            <label class="btn btn-outline-secondary btn-sm" for="m_${contadorQuestoes}">Múltipla</label>
+                        </div>
+                        <input type="hidden" name="bloco_formato[]" id="hidden_${contadorQuestoes}" value="aberta">
+                    </div>
+                </div>
+            </div>
+        `;
+        areaBlocos.insertAdjacentHTML('beforeend', blocoHTML);
+        document.querySelectorAll(`input[name="formato_${contadorQuestoes}"]`).forEach(r => {
+            r.onchange = (e) => document.getElementById(`hidden_${contadorQuestoes}`).value = e.target.value;
+        });
+    }
+
+    function removerBloco(id) { document.getElementById(`bloco-${id}`).remove(); }
+    window.onload = adicionarBloco;
+</script>
 </body>
 </html>
