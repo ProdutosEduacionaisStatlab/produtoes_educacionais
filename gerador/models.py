@@ -1,11 +1,18 @@
 from django.db import models
 
 class Curso(models.Model):
+    NIVEIS = [
+        ('fundamental', 'Ensino Fundamental'),
+        ('medio', 'Ensino Médio'),
+        ('superior', 'Ensino Superior'),
+    ]
+
     nome = models.CharField(max_length=200)
+    nivel = models.CharField(max_length=20, choices=NIVEIS)
     descricao_contexto = models.TextField(help_text="Ex: Focado em biologia marinha, aquicultura e clima.")
 
     def __str__(self):
-        return self.nome
+        return f"{self.nome} ({self.get_nivel_display()})"
 
 class Topico(models.Model):
     nome = models.CharField(max_length=200)
