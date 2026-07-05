@@ -74,17 +74,29 @@ def gerar_provas(request):
                 instrucoes_questoes += f"Formato Exigido: Questão direta (sem subitens), do tipo {formato}.\n\n"
 
         prompt_final = f"""
-        Você é um professor universitário de estatística experiente.
-        Crie as questões usando EXATAMENTE as regras matemáticas e de formato abaixo.
+                Você é um professor universitário experiente.
+                Crie a prova usando EXATAMENTE as regras matemáticas abaixo.
 
-        {contexto_prova}
+                {contexto_prova}
 
-        ESTRUTURA DAS QUESTÕES:
-        {instrucoes_questoes}
+                ESTRUTURA DAS QUESTÕES:
+                {instrucoes_questoes}
 
-        Escreva a prova inteira em código LaTeX limpo, pronto para compilar. 
-        Não use markdown como ```latex, devolva apenas o texto puro do código.
-        """
+                REGRAS RÍGIDAS DE FORMATAÇÃO (MUITO IMPORTANTE):
+                1. Devolva a resposta EXCLUSIVAMENTE em código HTML válido. Não escreva NENHUM texto solto sem estar dentro de uma tag HTML.
+                2. Use <h3 style="text-align:center;"> para títulos, <p> para parágrafos e SEMPRE use <ol> e <li> para as alternativas ou subitens.
+                3. Para a matemática, use a sintaxe MathJax: $...$ (na mesma linha) e $$...$$ (equações isoladas centralizadas).
+                4. NÃO use markdown (como **negrito** ou hífens para listas). Use as tags HTML corretas (<b>, <strong>, <li>).
+
+                EXEMPLO EXATO DE COMO VOCÊ DEVE RESPONDER:
+                <h3 style="text-align:center;">Avaliação de Estatística</h3>
+                <p><strong>Questão 1:</strong> A fórmula da variância é dada por $$\sigma^2 = \frac{{\sum (x - \mu)^2}}{{N}}$$</p>
+                <p>Calcule os valores abaixo:</p>
+                <ol type="a">
+                    <li>Para $x = 5$</li>
+                    <li>Para $x = 10$</li>
+                </ol>
+                """
 
         try:
             # NOVA CHAMADA PARA A NVIDIA (DeepSeek R1)
@@ -99,8 +111,10 @@ def gerar_provas(request):
             # Remove a tag <think> gerada pelo DeepSeek para exibir apenas o LaTeX
             resposta_final = re.sub(r'<think>.*?</think>', '', texto_bruto, flags=re.DOTALL).strip()
 
+            resposta_final = resposta_final.replace('```html', '').replace('```', '').strip()
+
             # Retorna o LaTeX puro na tela
-            return HttpResponse(f"<pre style='white-space: pre-wrap; padding: 20px;'>{resposta_final}</pre>")
+            return render(request, 'gerador/visualizar.html', {'prova_html': resposta_final})
 
         except Exception as e:
             return HttpResponse(f"<h3>Erro na IA:</h3> <p>{str(e)}</p>")

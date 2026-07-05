@@ -25,10 +25,10 @@
             <h4 class="px-4 fw-bold mb-4 text-indigo-400"> StatLab</h4>
             <ul class="nav flex-column px-2">
                 <li class="nav-item mb-2">
-                    <a class="nav-link text-white bg-secondary bg-opacity-25 rounded" href="{% url 'index' %}">📊 Construtor</a>
+                    <a class="nav-link text-white bg-secondary bg-opacity-25 rounded" href="{% url 'index' %}">Construtor</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link text-white-50" href="/admin/" target="_blank">⚙️ Configurações</a>
+                    <a class="nav-link text-white-50" href="/admin/" target="_blank">Configurações</a>
                 </li>
             </ul>
         </nav>
@@ -45,7 +45,7 @@
                     <div class="col-md-4">
                         <div class="slicer-box">
                             <label class="slicer-label">Professor</label>
-                            <input type="text" name="professor" class="form-control form-control-sm" value="Eduardo Pontes">
+                            <input type="text" name="professor" class="form-control form-control-sm" value="">
                         </div>
                         <div class="slicer-box">
                             <label class="slicer-label">Período</label>
@@ -133,7 +133,7 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <input type="number" name="bloco_qtd_itens[]" class="form-control form-control-sm" placeholder="Itens" value="0">
+                        <input type="number" name="bloco_qtd_itens[]" class="form-control form-control-sm" placeholder="Itens" value="0" min="0">
                     </div>
                     <div class="col-md-4">
                         <div class="btn-group w-100" role="group">

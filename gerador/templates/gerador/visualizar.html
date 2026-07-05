@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>StatLab - Avaliação Gerada</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body {
+            background-color: #525659; /* Fundo cinza escuro igual a leitor de PDF */
+            padding: 30px;
+        }
+        .folha-a4 {
+            background-color: white;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 60px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.3);
+            font-family: "Times New Roman", Times, serif; /* Fonte clássica de prova */
+            min-height: 297mm;
+        }
+        .questao {
+            margin-bottom: 25px;
+            text-align: justify;
+            font-size: 1.15rem;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container text-center mb-4">
+        <a href="{% url 'index' %}" class="btn btn-light fw-bold shadow-sm">← Voltar e Montar Outra</a>
+        <button class="btn btn-primary fw-bold shadow-sm ms-2" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    </div>
+
+    <div class="folha-a4">
+        {{ prova_html|safe }}
+    </div>
+
+</body>
+</html>
