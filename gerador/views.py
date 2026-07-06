@@ -34,7 +34,7 @@ def index(request):
 
 
 # ---------------------------------------------------------
-# 2. MOTOR DE GERAÇÃO DE PROVAS (RECEBE O MODO LEGO)
+# 2. MOTOR DE GERAÇÃO DE PROVAS 
 # ---------------------------------------------------------
 def gerar_provas(request):
     if request.method == 'POST':
@@ -48,7 +48,7 @@ def gerar_provas(request):
         formatos_lista = request.POST.getlist('bloco_formato[]')
 
         # Inicia a montagem do Super Prompt
-        contexto_prova = f"Crie uma avaliação de Estatística. Público-alvo: {curso.nome}. Contexto: {curso.descricao_contexto}\n\n"
+        contexto_prova = f"Crie uma avaliação customizada. Público-alvo: {curso.nome if curso else 'Geral'}. Contexto: {curso.descricao_contexto if curso else 'Geral'}\n\n"
         instrucoes_questoes = ""
 
         # Loop passando por cada bloco de Lego que o professor adicionou
@@ -76,54 +76,64 @@ def gerar_provas(request):
             else:
                 instrucoes_questoes += f"Formato Exigido: Questão direta (sem subitens), do tipo {formato}.\n\n"
 
+        # O NOVO PROMPT: Ordena a IA a separar a Prova do Gabarito em LaTeX puro
         prompt_final = f"""
-                Você é um professor universitário experiente.
-                Crie a prova usando EXATAMENTE as regras matemáticas abaixo.
+        Você é um professor universitário especialista em estatística.
+        Crie a prova usando EXATAMENTE as regras matemáticas abaixo.
 
-                {contexto_prova}
+        {contexto_prova}
 
-                ESTRUTURA DAS QUESTÕES:
-                {instrucoes_questoes}
+        ESTRUTURA DAS QUESTÕES:
+        {instrucoes_questoes}
 
-                REGRAS RÍGIDAS DE FORMATAÇÃO (MUITO IMPORTANTE):
-                1. Devolva a resposta EXCLUSIVAMENTE em código HTML válido. Não escreva NENHUM texto solto sem estar dentro de uma tag HTML.
-                2. Use <h3 style="text-align:center;"> para títulos, <p> para parágrafos e SEMPRE use <ol> e <li> para as alternativas ou subitens.
-                3. Para a matemática, use a sintaxe MathJax: $...$ (na mesma linha) e $$...$$ (equações isoladas centralizadas).
-                4. NÃO use markdown (como **negrito** ou hífens para listas). Use as tags HTML corretas (<b>, <strong>, <li>).
+        SUA TAREFA É GERAR DOIS DOCUMENTOS FORMATADOS EM LATEX PURO:
 
-                EXEMPLO EXATO DE COMO VOCÊ DEVE RESPONDER:
-                <h3 style="text-align:center;">Avaliação de Estatística</h3>
-                <p><strong>Questão 1:</strong> A fórmula da variância é dada por $$\sigma^2 = \frac{{\sum (x - \mu)^2}}{{N}}$$</p>
-                <p>Calcule os valores abaixo:</p>
-                <ol type="a">
-                    <li>Para $x = 5$</li>
-                    <li>Para $x = 10$</li>
-                </ol>
-                """
+        DOCUMENTO 1: A PROVA
+        - Formate as questões com seus respectivos enunciados prontos para compilação em LaTeX.
+        - Não inclua nenhuma resposta aqui.
+        - Após a última questão da prova, insira EXATAMENTE esta tag em uma linha isolada:
+        [DIVISOR_STATLAB]
+
+        DOCUMENTO 2: O GABARITO COM RESOLUÇÕES
+        - Para cada questão, gere a resolução completa e o passo a passo matemático detalhado.
+        - Mantenha a formatação em LaTeX rigorosa para as equações.
+        """
 
         try:
-            # NOVA CHAMADA PARA A NVIDIA (DeepSeek R1)
+            # CHAMADA PARA A NVIDIA (DeepSeek)
             resposta_completa = client.chat.completions.create(
-                model="deepseek-ai/deepseek-v4-pro",
+                model="deepseek-ai/deepseek-v4-pro", # Ou o modelo que estiver usando
                 messages=[{"role": "user", "content": prompt_final}],
                 temperature=0.3,
                 max_tokens=4096
             )
 
             texto_bruto = resposta_completa.choices[0].message.content
-            # Remove a tag <think> gerada pelo DeepSeek para exibir apenas o LaTeX
-            resposta_final = re.sub(r'<think>.*?</think>', '', texto_bruto, flags=re.DOTALL).strip()
+            
+            # Remove a tag <think> gerada pelo DeepSeek e blocos de código
+            resposta_limpa = re.sub(r'<think>.*?</think>', '', texto_bruto, flags=re.DOTALL).strip()
+            resposta_limpa = resposta_limpa.replace('```latex', '').replace('```tex', '').replace('```', '').strip()
 
-            resposta_final = resposta_final.replace('```html', '').replace('```', '').strip()
+            # O GOLPE DE MESTRE: Corta o texto no meio usando a tag
+            if "[DIVISOR_STATLAB]" in resposta_limpa:
+                partes = resposta_limpa.split("[DIVISOR_STATLAB]")
+                prova_latex = partes[0].strip()
+                gabarito_latex = partes[1].strip()
+            else:
+                # Se a IA falhar em colocar a tag, salva tudo na prova e avisa no gabarito
+                prova_latex = resposta_limpa
+                gabarito_latex = "% Aviso: A IA não separou o gabarito corretamente na geração."
 
-            # Retorna o LaTeX puro na tela
-            return render(request, 'gerador/visualizar.html', {'prova_html': resposta_final})
+            # Envia as duas partes separadas para o HTML
+            return render(request, 'gerador/visualizar.html', {
+                'prova_latex_gerada': prova_latex,
+                'gabarito_latex_gerado': gabarito_latex
+            })
 
         except Exception as e:
             return HttpResponse(f"<h3>Erro na IA:</h3> <p>{str(e)}</p>")
 
     return render(request, 'gerador/index.html')
-
 
 # ---------------------------------------------------------
 # 3. SALA DE TREINAMENTO (LEITOR DE PDF DO ADMIN)
