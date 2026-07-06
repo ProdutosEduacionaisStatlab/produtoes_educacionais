@@ -144,3 +144,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 import os
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyCcogW3-saEFYcNa69hpt3EV51Vi7vUZ2c')
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://163.176.51.10',
+    'http://163.176.51.10:8000',
+]
