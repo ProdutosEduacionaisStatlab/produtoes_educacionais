@@ -7,6 +7,9 @@ from django.http import HttpResponse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from openai import OpenAI
+import io
+import zipfile
+from django.shortcuts import redirect
 from .models import Curso, Topico, EsqueletoQuestao
 
 # ---------------------------------------------------------
@@ -194,3 +197,42 @@ def treinar_ia(request):
             messages.error(request, f"Erro ao processar pela IA: {str(e)}")
 
     return render(request, 'gerador/treinar.html')
+
+
+
+def baixar_latex(request):
+    if request.method == 'POST':
+        conteudo_latex = request.POST.get('conteudo_gerado', '')
+        response = HttpResponse(conteudo_latex, content_type='text/plain')
+        response['Content-Disposition'] = 'attachment; filename="prova_statlab.tex"'
+        return response
+    
+    return redirect('index')
+
+
+
+def baixar_pacote_prova(request):
+    if request.method == 'POST':
+        # 1. Pega os textos que a IA gerou (vamos supor que você envie a prova e o gabarito separados no HTML)
+        prova_tex = request.POST.get('conteudo_prova', '% Código LaTeX da Prova')
+        gabarito_tex = request.POST.get('conteudo_gabarito', '% Código LaTeX do Gabarito')
+        
+        # 2. Cria um espaço temporário na memória RAM
+        buffer = io.BytesIO()
+
+        # 3. Cria o arquivo ZIP dentro desse espaço
+        with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Aqui vamos adicionando os arquivos dentro do ZIP um por um!
+            zip_file.writestr('prova_editavel.tex', prova_tex)
+            zip_file.writestr('gabarito_editavel.tex', gabarito_tex)
+            
+            # (No futuro, quando tivermos o código do Word e PDF prontos, 
+            # é só adicionar mais linhas zip_file.writestr() aqui)
+
+        # 4. Prepara a resposta para o navegador baixar como ZIP
+        response = HttpResponse(buffer.getvalue(), content_type='application/zip')
+        response['Content-Disposition'] = 'attachment; filename="Pacote_StatLab.zip"'
+
+        return response
+    
+    return redirect('index')
