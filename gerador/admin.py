@@ -12,4 +12,5 @@ class TopicoAdmin(admin.ModelAdmin):
 
 @admin.register(EsqueletoQuestao)
 class EsqueletoQuestaoAdmin(ImportExportModelAdmin):
-    list_display = ('id', 'topico', 'nivel') # Mostra essas colunas na tela
+    # CORREÇÃO: Trocamos 'nivel' por 'subtopico'
+    list_display = ('id', 'topico', 'subtopico')
