@@ -4,13 +4,12 @@ from .models import Curso, Topico, EsqueletoQuestao
 
 @admin.register(Curso)
 class CursoAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'nivel')
+    pass  # O modo mais seguro possível. O Django decide o que mostrar.
 
 @admin.register(Topico)
 class TopicoAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'curso')
+    pass  # Nada de tentar chamar colunas que podem não existir.
 
 @admin.register(EsqueletoQuestao)
 class EsqueletoQuestaoAdmin(ImportExportModelAdmin):
-    # CORREÇÃO: Trocamos 'nivel' por 'subtopico'
     list_display = ('id', 'topico', 'subtopico')
